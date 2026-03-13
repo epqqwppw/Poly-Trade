@@ -466,9 +466,17 @@ def calculate_position_size(capital, confidence, max_pct=0.25):
     """
     Kelly-inspired position sizing with conservative fraction.
     
+    Uses 1/4 Kelly (kelly_fraction=0.25) rather than full Kelly because:
+    - Full Kelly maximizes long-term growth but has very high variance
+    - 1/2 Kelly is common in finance but still aggressive for prediction markets
+    - 1/4 Kelly reduces variance by ~75% while sacrificing only ~44% of growth rate
+    - With $100 capital and a 10% daily loss limit, 1/4 Kelly keeps individual
+      trade losses small enough to survive 3-5 consecutive losses without
+      triggering the circuit breaker or daily loss limit prematurely
+    
     capital:    Current available USDC balance
     confidence: Signal strength (0.0 to 1.0)
-    max_pct:    Maximum capital percentage per trade
+    max_pct:    Maximum capital percentage per trade (hard cap)
     """
     kelly_fraction = 0.25  # Use 1/4 Kelly for safety
     base_size = capital * max_pct
@@ -659,8 +667,19 @@ polymarket-btc-bot/
 
 #### `strategy/latency_arb.py`
 - Receives Binance price updates + Polymarket book updates
-- Calculates Binance-implied fair probability: `p = Φ((ln(St/S0) + μτ) / (σ√τ))`
-- Compares against Polymarket best ask
+- Calculates Binance-implied fair probability using the digital options pricing formula:
+  ```
+  p = Φ((ln(St/S0) + μτ) / (σ√τ))
+  
+  Where:
+    Φ  = Standard normal CDF (scipy.stats.norm.cdf)
+    St = Current BTC price from Binance aggTrade feed
+    S0 = BTC price at the start of the 15-min window (the strike price)
+    μ  = Estimated drift (annualized, from recent price history; typically ~0 for 15-min)
+    τ  = Time remaining to expiry, in years (e.g., 10 min = 10/(365.25×24×60))
+    σ  = Estimated annualized volatility (EWMA of recent log returns)
+  ```
+- Compares the Binance-implied fair probability against Polymarket's best ask price
 - Emits BUY signal when mispricing > `MIN_EDGE_CENTS` (3¢)
 - Emits SELL signal on take-profit, stop-loss, or momentum reversal
 
@@ -909,7 +928,7 @@ We audited all 6 community bots and 65 official Polymarket repos. Here are the c
 | Lesson | How We Apply It |
 |---|---|
 | ✅ Chainlink as resolution oracle source (not Binance) | Phase 4: Secondary confirmation signal |
-| ✅ Digital options pricing formula: `p = Φ((ln(St/S0) + μτ) / (σ√τ))` | Adopted in `latency_arb.py` for fair value |
+| ✅ Digital options pricing formula: `p = Φ((ln(St/S0) + μτ) / (σ√τ))` | Adopted in `latency_arb.py` for fair value calculation (see Module Spec §10.2 for full variable definitions) |
 | ✅ Kelly criterion position sizing | Adopted: 1/4 Kelly in `position_sizer.py` |
 | ✅ ML calibration (Platt scaling) | Phase 4: Probability calibration |
 | ❌ Live trading NOT implemented | We implement full live execution |
