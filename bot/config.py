@@ -14,18 +14,18 @@ DEFAULT_CONFIG_PATH = os.path.join(
 
 @dataclass
 class StrategyConfig:
-    spread_cents: float = 3.0
+    spread_cents: float = 4.0
     num_levels: int = 3
-    size_per_level_usd: float = 8.0
+    size_per_level_usd: float = 5.0
     requote_interval_seconds: float = 30.0
-    inventory_skew_factor: float = 0.5
+    inventory_skew_factor: float = 1.0
 
 
 @dataclass
 class RiskConfig:
-    max_position_usd: float = 25.0
-    daily_loss_limit_usd: float = 10.0
-    max_drawdown_usd: float = 25.0
+    max_position_usd: float = 20.0
+    daily_loss_limit_usd: float = 8.0
+    max_drawdown_usd: float = 15.0
     circuit_breaker_losses: int = 3
     circuit_breaker_pause_seconds: float = 300.0
     min_time_before_expiry_seconds: float = 120.0
@@ -54,7 +54,7 @@ class MarketFilterConfig:
 @dataclass
 class Config:
     starting_capital_usd: float = 100.0
-    seed_pct: float = 0.5
+    seed_pct: float = 0.3
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     api: APIConfig = field(default_factory=APIConfig)

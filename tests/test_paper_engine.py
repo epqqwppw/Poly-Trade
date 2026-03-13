@@ -173,7 +173,10 @@ class TestBandsStrategy(unittest.TestCase):
         self.assertGreater(len(sells), 0, "Should generate sell orders")
 
     def test_buy_prices_below_mid(self):
-        cfg = StrategyConfig(spread_cents=4.0, num_levels=2, size_per_level_usd=8.0)
+        cfg = StrategyConfig(
+            spread_cents=4.0, num_levels=2, size_per_level_usd=8.0,
+            inventory_skew_factor=0.0,  # Zero skew to test pure band placement
+        )
         strat = BandsStrategy(cfg)
         book = _make_book(bid_price=0.53, ask_price=0.57)
         orders = strat.generate_quotes(
@@ -185,7 +188,10 @@ class TestBandsStrategy(unittest.TestCase):
                 self.assertLess(o.price, mid, f"Buy at {o.price} should be < mid {mid}")
 
     def test_sell_prices_above_mid(self):
-        cfg = StrategyConfig(spread_cents=4.0, num_levels=2, size_per_level_usd=8.0)
+        cfg = StrategyConfig(
+            spread_cents=4.0, num_levels=2, size_per_level_usd=8.0,
+            inventory_skew_factor=0.0,  # Zero skew to test pure band placement
+        )
         strat = BandsStrategy(cfg)
         book = _make_book(bid_price=0.53, ask_price=0.57)
         orders = strat.generate_quotes(
@@ -261,9 +267,171 @@ class TestRiskManager(unittest.TestCase):
             VirtualOrder(side=Side.BUY, price=0.50, size=100),  # $50 → total $100
         ]
         filtered = risk.filter_orders(orders, portfolio_value=100)
-        # Max position is $25, so should only allow partial
+        # Max position is $20, so should only allow partial
         total = sum(o.price * o.size for o in filtered)
-        self.assertLessEqual(total, 25.01)
+        self.assertLessEqual(total, cfg.risk.max_position_usd + 0.01)
+
+    def test_filter_accounts_for_inventory(self):
+        """Risk filter should block buy orders when existing inventory is high."""
+        cfg = Config.load()
+        risk = RiskManager(cfg.risk)
+        orders = [
+            VirtualOrder(side=Side.BUY, price=0.50, size=20),  # $10
+            VirtualOrder(side=Side.BUY, price=0.49, size=20),  # $9.80
+        ]
+        # Existing inventory already at $18 → only $2 room before $20 limit
+        filtered = risk.filter_orders(orders, portfolio_value=100, inventory_value=18.0)
+        buy_total = sum(o.price * o.size for o in filtered if o.side == Side.BUY)
+        self.assertLessEqual(buy_total + 18.0, cfg.risk.max_position_usd + 0.01)
+
+    def test_filter_allows_sells_with_high_inventory(self):
+        """Sell orders should still be allowed even when inventory is high."""
+        cfg = Config.load()
+        risk = RiskManager(cfg.risk)
+        orders = [
+            VirtualOrder(side=Side.SELL, price=0.55, size=10),  # $5.50
+            VirtualOrder(side=Side.SELL, price=0.56, size=10),  # $5.60
+        ]
+        # High inventory should NOT block sells (selling reduces risk)
+        filtered = risk.filter_orders(orders, portfolio_value=100, inventory_value=50.0)
+        self.assertEqual(len(filtered), 2)
+
+
+class TestSkewDirection(unittest.TestCase):
+    """Tests to verify inventory skew pushes quotes in the correct direction."""
+
+    def test_long_inventory_lowers_asks(self):
+        """When holding excess tokens, asks should drop to sell more aggressively."""
+        cfg = StrategyConfig(
+            spread_cents=4.0, num_levels=2, size_per_level_usd=5.0,
+            inventory_skew_factor=1.0,
+        )
+        strat = BandsStrategy(cfg)
+        book = _make_book(bid_price=0.53, ask_price=0.57)
+        mid = book.midpoint  # 0.55
+
+        # Balanced inventory
+        balanced = strat.generate_quotes(
+            book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
+        )
+        balanced_asks = [o.price for o in balanced if o.side == Side.SELL]
+
+        # Heavy long inventory (200 tokens, way above target ~91)
+        long_orders = strat.generate_quotes(
+            book=book, yes_tokens=200, usdc_balance=50, starting_capital=100,
+        )
+        long_asks = [o.price for o in long_orders if o.side == Side.SELL]
+
+        if balanced_asks and long_asks:
+            # Long inventory → asks should be LOWER (more aggressive selling)
+            self.assertLess(
+                min(long_asks), min(balanced_asks),
+                "Long inventory should lower asks to sell more aggressively",
+            )
+
+    def test_long_inventory_lowers_bids(self):
+        """When holding excess tokens, bids should drop to buy less aggressively."""
+        cfg = StrategyConfig(
+            spread_cents=4.0, num_levels=2, size_per_level_usd=5.0,
+            inventory_skew_factor=1.0,
+        )
+        strat = BandsStrategy(cfg)
+        book = _make_book(bid_price=0.53, ask_price=0.57)
+
+        balanced = strat.generate_quotes(
+            book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
+        )
+        balanced_bids = [o.price for o in balanced if o.side == Side.BUY]
+
+        long_orders = strat.generate_quotes(
+            book=book, yes_tokens=200, usdc_balance=50, starting_capital=100,
+        )
+        long_bids = [o.price for o in long_orders if o.side == Side.BUY]
+
+        if balanced_bids and long_bids:
+            self.assertLess(
+                max(long_bids), max(balanced_bids),
+                "Long inventory should lower bids to buy less aggressively",
+            )
+
+    def test_short_inventory_raises_bids(self):
+        """When holding too few tokens, bids should rise to buy more aggressively."""
+        cfg = StrategyConfig(
+            spread_cents=4.0, num_levels=2, size_per_level_usd=5.0,
+            inventory_skew_factor=1.0,
+        )
+        strat = BandsStrategy(cfg)
+        book = _make_book(bid_price=0.53, ask_price=0.57)
+
+        balanced = strat.generate_quotes(
+            book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
+        )
+        balanced_bids = [o.price for o in balanced if o.side == Side.BUY]
+
+        # Very few tokens — want to buy more
+        short_orders = strat.generate_quotes(
+            book=book, yes_tokens=10, usdc_balance=50, starting_capital=100,
+        )
+        short_bids = [o.price for o in short_orders if o.side == Side.BUY]
+
+        if balanced_bids and short_bids:
+            self.assertGreater(
+                max(short_bids), max(balanced_bids),
+                "Short inventory should raise bids to buy more aggressively",
+            )
+
+
+class TestExpiryCheck(unittest.TestCase):
+    """Tests for the market expiry proximity check."""
+
+    def test_not_near_expiry(self):
+        from bot.main import _is_near_expiry
+        from bot.models import MarketInfo
+
+        # Market ending far in the future
+        market = MarketInfo(
+            condition_id="test",
+            question="Test",
+            yes_token_id="YES",
+            no_token_id="NO",
+            end_date="2099-12-31T23:59:59Z",
+            active=True,
+        )
+        self.assertFalse(_is_near_expiry(market, 120))
+
+    def test_near_expiry(self):
+        from bot.main import _is_near_expiry
+        from bot.models import MarketInfo
+        from datetime import datetime, timezone, timedelta
+
+        # Market ending 60 seconds from now
+        soon = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        market = MarketInfo(
+            condition_id="test",
+            question="Test",
+            yes_token_id="YES",
+            no_token_id="NO",
+            end_date=soon,
+            active=True,
+        )
+        # 120s threshold → 60s remaining → near expiry
+        self.assertTrue(_is_near_expiry(market, 120))
+
+    def test_empty_end_date(self):
+        from bot.main import _is_near_expiry
+        from bot.models import MarketInfo
+
+        market = MarketInfo(
+            condition_id="test",
+            question="Test",
+            yes_token_id="YES",
+            no_token_id="NO",
+            end_date="",
+            active=True,
+        )
+        self.assertFalse(_is_near_expiry(market, 120))
 
 
 if __name__ == "__main__":

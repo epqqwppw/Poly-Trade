@@ -7,7 +7,7 @@ import time
 from typing import List
 
 from .config import RiskConfig
-from .models import VirtualOrder
+from .models import Side, VirtualOrder
 
 logger = logging.getLogger(__name__)
 
@@ -61,38 +61,59 @@ class RiskManager:
         self,
         orders: List[VirtualOrder],
         portfolio_value: float,
+        inventory_value: float = 0.0,
     ) -> List[VirtualOrder]:
         """Remove orders that would exceed position limits.
 
         Args:
             orders: Proposed orders from strategy.
             portfolio_value: Current total portfolio value.
+            inventory_value: Current YES token inventory value (tokens × mid).
 
         Returns:
             Filtered list of orders that pass risk checks.
         """
         max_pos = self.cfg.max_position_usd
         approved: List[VirtualOrder] = []
-        total_exposure = 0.0
+        buy_exposure = 0.0
+        sell_exposure = 0.0
 
         for order in orders:
             order_value = order.price * order.size
-            if total_exposure + order_value > max_pos:
-                logger.debug(
-                    "Order rejected by risk: $%.2f would exceed $%.2f limit",
-                    order_value,
-                    max_pos,
-                )
-                continue
-            total_exposure += order_value
+
+            if order.side == Side.BUY:
+                # Cap buy exposure accounting for existing inventory
+                if buy_exposure + inventory_value + order_value > max_pos:
+                    logger.debug(
+                        "BUY order rejected: $%.2f + $%.2f inventory + $%.2f new > $%.2f limit",
+                        buy_exposure,
+                        inventory_value,
+                        order_value,
+                        max_pos,
+                    )
+                    continue
+                buy_exposure += order_value
+            else:
+                # Sell orders reduce inventory risk — cap more loosely
+                if sell_exposure + order_value > max_pos:
+                    logger.debug(
+                        "SELL order rejected: $%.2f would exceed $%.2f limit",
+                        sell_exposure + order_value,
+                        max_pos,
+                    )
+                    continue
+                sell_exposure += order_value
+
             approved.append(order)
 
         if len(approved) < len(orders):
             logger.info(
-                "Risk filter: %d/%d orders approved (exposure $%.2f/$%.2f)",
+                "Risk filter: %d/%d orders approved (buy $%.2f, sell $%.2f, inventory $%.2f / max $%.2f)",
                 len(approved),
                 len(orders),
-                total_exposure,
+                buy_exposure,
+                sell_exposure,
+                inventory_value,
                 max_pos,
             )
         return approved

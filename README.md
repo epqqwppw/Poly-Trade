@@ -148,16 +148,20 @@ Virtual orders fill when real market prices cross the order price:
 
 ```
 Level 1: Position Sizing
-  └── Max $25 per position (25% of $100)
+  └── Max $20 per position (20% of $100)
+  └── Includes existing inventory in limit check
 
 Level 2: Daily Loss Limit
-  └── Stop trading at -$10/day
+  └── Stop trading at -$8/day
 
 Level 3: Circuit Breaker
   └── 3 consecutive losses → pause 5 minutes
 
 Level 4: Max Drawdown
-  └── Stop at -$25 total (25% of capital)
+  └── Stop at -$15 total (15% of capital)
+
+Level 5: Expiry Protection
+  └── Cancel all orders 2 minutes before market close
 ```
 
 ## Configuration
@@ -167,20 +171,21 @@ Edit `config.json` to customize:
 ```jsonc
 {
   "starting_capital_usd": 100.0,    // Virtual starting balance
-  "seed_pct": 0.5,                  // % of capital to seed as YES tokens
+  "seed_pct": 0.3,                  // % of capital to seed as YES tokens
   "strategy": {
-    "spread_cents": 3,              // Distance from mid per level (in cents)
+    "spread_cents": 4,              // Distance from mid per level (in cents)
     "num_levels": 3,                // Number of bands on each side
-    "size_per_level_usd": 8.0,     // USD per order level
+    "size_per_level_usd": 5.0,     // USD per order level
     "requote_interval_seconds": 30, // How often to refresh quotes
-    "inventory_skew_factor": 0.5   // How aggressively to skew (0-1)
+    "inventory_skew_factor": 1.0   // How aggressively to skew (0-2)
   },
   "risk": {
-    "max_position_usd": 25.0,      // Max $ in any single position
-    "daily_loss_limit_usd": 10.0,  // Stop trading after this daily loss
-    "max_drawdown_usd": 25.0,      // Kill switch threshold
+    "max_position_usd": 20.0,      // Max $ in any single position (incl. inventory)
+    "daily_loss_limit_usd": 8.0,   // Stop trading after this daily loss
+    "max_drawdown_usd": 15.0,      // Kill switch threshold
     "circuit_breaker_losses": 3,   // Consecutive losses before pause
-    "circuit_breaker_pause_seconds": 300
+    "circuit_breaker_pause_seconds": 300,
+    "min_time_before_expiry_seconds": 120  // Stop 2 min before market ends
   },
   "api": {
     "poll_interval_seconds": 5,     // How often to fetch order book

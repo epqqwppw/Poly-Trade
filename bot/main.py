@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import logging
 import signal
 import sys
@@ -26,6 +27,19 @@ _shutdown = False
 def _handle_signal(signum: int, frame: object) -> None:
     global _shutdown
     _shutdown = True
+
+
+def _is_near_expiry(market: MarketInfo, min_seconds: float) -> bool:
+    """Return True if the market is within *min_seconds* of its end time."""
+    if not market.end_date:
+        return False
+    try:
+        end_str = market.end_date.replace("Z", "+00:00")
+        end_dt = datetime.fromisoformat(end_str)
+        remaining = (end_dt - datetime.now(timezone.utc)).total_seconds()
+        return remaining <= min_seconds
+    except (ValueError, TypeError):
+        return False
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -120,6 +134,18 @@ def run(config: Config, demo: bool = False) -> None:
                 consecutive_losses=engine.consecutive_losses,
             )
 
+            # 5b. Expiry check — stop placing new orders near market close
+            near_expiry = _is_near_expiry(
+                current_market, config.risk.min_time_before_expiry_seconds
+            )
+            if near_expiry and can_trade:
+                can_trade = False
+                risk_reason = "Market near expiry — no new orders"
+                if engine.open_orders:
+                    engine.cancel_all_orders()
+                    logger.info("Cancelled orders: market within %ds of expiry",
+                                int(config.risk.min_time_before_expiry_seconds))
+
             # 6. Generate new quotes (periodically or after fills)
             now = time.time()
             time_since_requote = now - last_requote_time
@@ -141,7 +167,12 @@ def run(config: Config, demo: bool = False) -> None:
                     usdc_balance=available_usdc,
                     starting_capital=engine.starting_capital,
                 )
-                quotes = risk.filter_orders(quotes, engine.portfolio_value(book.midpoint))
+                inventory_value = engine.wallet.yes_tokens * (book.midpoint or 0)
+                quotes = risk.filter_orders(
+                    quotes,
+                    engine.portfolio_value(book.midpoint),
+                    inventory_value=inventory_value,
+                )
                 for order in quotes:
                     engine.place_order(order)
                 last_requote_time = now
