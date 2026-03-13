@@ -1,0 +1,2 @@
+# Core dependency — HTTP client for Polymarket API
+requests>=2.31.0,<3.0.0
