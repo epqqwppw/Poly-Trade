@@ -131,9 +131,11 @@ class BandsStrategy:
         # Clamp imbalance to [-1, 1]
         imbalance = max(-1.0, min(1.0, imbalance))
 
-        # Skew: when long (positive imbalance), shift quotes DOWN to sell more
+        # Skew: when long (positive imbalance), shift quotes DOWN to sell more.
         # Positive skew subtracts from both bid and ask prices (bid-skew, ask-skew),
         # so bids go further below mid (less buying) and asks drop closer to mid
         # (more aggressive selling).
+        # Example: imbalance=0.5, skew_factor=1.0, spread=4¢
+        #   → skew = 0.02, bid shifts 0.53→0.51, ask shifts 0.57→0.55
         skew = imbalance * self.skew_factor * (self.spread_cents / 100.0)
         return round(skew, 4)

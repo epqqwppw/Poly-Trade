@@ -311,6 +311,8 @@ class TestSkewDirection(unittest.TestCase):
         mid = book.midpoint  # 0.55
 
         # Balanced inventory
+        # Balanced inventory: target = starting_capital * 0.5 / mid
+        # = 100 * 0.5 / 0.55 ≈ 91 tokens
         balanced = strat.generate_quotes(
             book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
         )
@@ -338,6 +340,7 @@ class TestSkewDirection(unittest.TestCase):
         strat = BandsStrategy(cfg)
         book = _make_book(bid_price=0.53, ask_price=0.57)
 
+        # Balanced: ~91 tokens (see calculation above)
         balanced = strat.generate_quotes(
             book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
         )
@@ -363,6 +366,7 @@ class TestSkewDirection(unittest.TestCase):
         strat = BandsStrategy(cfg)
         book = _make_book(bid_price=0.53, ask_price=0.57)
 
+        # Balanced: ~91 tokens (see calculation above)
         balanced = strat.generate_quotes(
             book=book, yes_tokens=91, usdc_balance=50, starting_capital=100,
         )

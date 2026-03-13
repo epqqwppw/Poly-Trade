@@ -82,7 +82,9 @@ class RiskManager:
             order_value = order.price * order.size
 
             if order.side == Side.BUY:
-                # Cap buy exposure accounting for existing inventory
+                # Cap buy exposure accounting for existing inventory.
+                # This prevents over-accumulation in directional markets:
+                # new buys + existing inventory must stay under max_position.
                 if buy_exposure + inventory_value + order_value > max_pos:
                     logger.debug(
                         "BUY order rejected: $%.2f + $%.2f inventory + $%.2f new > $%.2f limit",
