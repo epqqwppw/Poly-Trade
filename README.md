@@ -35,7 +35,7 @@ The bot acts as an **automated liquidity provider** (market maker) on Polymarket
 - Python 3.10+
 - Internet connection (for live Polymarket data) — or use `--demo` for offline mode
 
-### Install & Run
+### Option A: Run Locally
 
 ```bash
 # Clone the repo
@@ -51,6 +51,25 @@ python -m bot
 # Or run in demo mode (no internet needed)
 python -m bot --demo
 ```
+
+### Option B: Run in GitHub Codespaces (Cloud)
+
+You can run this bot entirely in the cloud using **GitHub Codespaces** — no local setup required.
+
+1. Go to [github.com/epqqwppw/Poly-Trade](https://github.com/epqqwppw/Poly-Trade)
+2. Click the green **"<> Code"** button → **"Codespaces"** tab → **"Create codespace on main"**
+3. Wait for the environment to build (~30 seconds — dependencies install automatically)
+4. In the Codespace terminal, run:
+
+```bash
+# Start the bot (dependencies are already installed)
+./start.sh
+
+# Or use demo mode
+./start.sh --demo
+```
+
+> **Can Codespaces run 24/7?**  See the [Codespaces for 24/7 Operation](#codespaces-for-247-operation) section below.
 
 ### Options
 
@@ -174,6 +193,8 @@ Edit `config.json` to customize:
 
 ```
 Poly-Trade/
+├── .devcontainer/
+│   └── devcontainer.json     # GitHub Codespaces environment config
 ├── bot/
 │   ├── __init__.py
 │   ├── __main__.py        # python -m bot entry point
@@ -191,6 +212,7 @@ Poly-Trade/
 ├── docs/                     # Research documentation
 ├── config.json               # Default configuration
 ├── requirements.txt          # Python dependencies (just 'requests')
+├── start.sh                  # One-command launcher (works in Codespaces)
 └── README.md
 ```
 
@@ -219,6 +241,91 @@ python -m unittest tests.test_paper_engine -v
 | **Spread capture** | Buy low (bid), sell high (ask) on round trips |
 | **Maker rebates** | 25% of taker fees earned daily in USDC (at 00:00 UTC) |
 | **Liquidity rewards** | Direct USDC rewards for maintaining tight quotes |
+
+## Codespaces for 24/7 Operation
+
+**Yes, you can use GitHub Codespaces to run this bot in the cloud.** Here's the honest breakdown:
+
+### What Works Out of the Box
+
+| Feature | Status |
+|---|---|
+| Run bot in cloud terminal | ✅ Works perfectly |
+| Real Polymarket API data | ✅ Codespaces have internet access |
+| No local machine needed | ✅ Run from any browser |
+| Pre-configured environment | ✅ Dependencies install automatically |
+| Free tier available | ✅ 120 core-hours/month on GitHub Free |
+
+### The 24/7 Challenge
+
+Codespaces are **development environments**, not servers. By default they **auto-stop after 30 minutes of inactivity** (no browser tab open). Options to keep the bot running:
+
+| Approach | Uptime | Cost | Complexity |
+|---|---|---|---|
+| **Keep browser tab open** | While tab is open | Free tier hours | None |
+| **Increase idle timeout** | Up to 4 hours | Free tier hours | Settings change |
+| **Use `nohup` + keep-alive** | ~4 hours per session | Free tier hours | Low |
+| **Restart daily** | Manual sessions | Free tier hours | Low |
+
+### Recommended: Increase Idle Timeout + Keep-Alive
+
+**Step 1:** Increase Codespace idle timeout to 4 hours (maximum):
+
+1. Go to [github.com/settings/codespaces](https://github.com/settings/codespaces)
+2. Under **Default idle timeout**, set to **240 minutes**
+3. Save
+
+**Step 2:** Run the bot with `nohup` so it survives if the terminal disconnects:
+
+```bash
+# Start bot in background (survives terminal disconnect)
+nohup python -m bot > bot.log 2>&1 &
+
+# Check if it's running
+tail -f bot.log
+
+# Stop the bot
+kill %1
+```
+
+**Step 3 (optional):** Keep the Codespace active by opening a second terminal and running:
+
+```bash
+# Sends a harmless keypress every 5 minutes to prevent idle shutdown
+while true; do sleep 300; echo "keepalive $(date)"; done
+```
+
+### Cost Estimate
+
+| Plan | Included Hours | Bot Runtime @ 2-core |
+|---|---|---|
+| **GitHub Free** | 120 core-hours/month | ~60 hours (2.5 days) |
+| **GitHub Pro** ($4/mo) | 180 core-hours/month | ~90 hours (3.75 days) |
+| **Pay-as-you-go** | $0.18/hour (2-core) | ~$4.32/day for 24/7 |
+
+> **For true 24/7 operation**, a $5/month VPS (DigitalOcean, Hetzner, Railway) is more cost-effective than Codespaces. But for testing and paper trading sessions, Codespaces is perfect and free.
+
+### Quick Codespaces Commands
+
+```bash
+# Start bot (foreground — see live dashboard)
+./start.sh
+
+# Start bot (background — keeps running if terminal closes)
+nohup python -m bot > bot.log 2>&1 &
+
+# View background bot output
+tail -f bot.log
+
+# Stop background bot
+kill $(cat /tmp/bot.pid 2>/dev/null || pgrep -f "python -m bot")
+
+# Run in demo mode (no internet needed)
+./start.sh --demo
+
+# Run tests
+python -m unittest tests.test_paper_engine -v
+```
 
 ## From Paper to Real Trading
 
