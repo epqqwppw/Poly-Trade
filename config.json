@@ -1,0 +1,31 @@
+{
+  "starting_capital_usd": 100.0,
+  "seed_pct": 0.3,
+  "strategy": {
+    "spread_cents": 4,
+    "num_levels": 3,
+    "size_per_level_usd": 5.0,
+    "requote_interval_seconds": 30,
+    "inventory_skew_factor": 1.0
+  },
+  "risk": {
+    "max_position_usd": 20.0,
+    "daily_loss_limit_usd": 8.0,
+    "max_drawdown_usd": 15.0,
+    "circuit_breaker_losses": 3,
+    "circuit_breaker_pause_seconds": 300,
+    "min_time_before_expiry_seconds": 120
+  },
+  "api": {
+    "gamma_url": "https://gamma-api.polymarket.com",
+    "clob_url": "https://clob.polymarket.com",
+    "poll_interval_seconds": 5,
+    "market_scan_interval_seconds": 60,
+    "request_timeout_seconds": 10
+  },
+  "market_filter": {
+    "keywords": ["BTC", "Bitcoin", "bitcoin"],
+    "duration_keywords": ["15 minute", "15-minute", "15min", "1 hour", "1-hour", "1hr"],
+    "fallback_to_any_crypto": true
+  }
+}
