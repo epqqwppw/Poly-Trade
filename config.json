@@ -1,0 +1,13 @@
+{
+  "token_ids": [],
+  "seed_pct": 0.3,
+  "spread_cents": 4,
+  "size_per_level_usd": 5.0,
+  "skew_factor": 1.0,
+  "max_position_usd": 20.0,
+  "daily_loss_limit": 8.0,
+  "max_drawdown": 15.0,
+  "duration_keywords": ["1-hour", "1 hour", "hourly"],
+  "clob_api_url": "https://clob.polymarket.com",
+  "ws_url": "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+}
