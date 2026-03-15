@@ -177,7 +177,7 @@ single-fill events, ~50% will be the losing side.
 - ≈ 0.30 × $0.20 + 0.25 × $5.10 + 0.25 × (−$4.90) + 0.20 × $0
 - ≈ $0.06 + $1.275 − $1.225 + $0 = **+$0.11 per trade** (rough estimate)
 
-### 3.4 Optimisations to Reduce Risk
+### 3.4 Optimizations to Reduce Risk
 
 1. **Widen the sell price to $0.52–0.55:** Higher profit per double fill, but
    lower fill rate. Sweet spot: price where both sides still get taker flow.
@@ -302,7 +302,7 @@ very rare (sub-1%), but you need confidence in the direction for a longer hold.
    at the endpoint. A 96/4 split with 5 minutes left in a 1h market is
    much safer than 96/4 with 30s left in a 5m market.
 
-### 4.6 Expected Value (Optimised)
+### 4.6 Expected Value (Optimized)
 
 With the safety rules above (sell at T-15s, only when ≤$0.03, Binance confirms):
 - Average profit per successful exit: ~$0.15–0.20
